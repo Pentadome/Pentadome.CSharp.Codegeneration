@@ -19,7 +19,7 @@ namespace Pentadome.CSharp.SourceGenerators
         /// </summary>
         public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
         {
-            // any field with at least one attribute is a candidate for property generation
+            // any field where parent is a class and that class has at least one attribute is a candidate for property generation
             if (syntaxNode is FieldDeclarationSyntax fieldDeclarationSyntax
                 && fieldDeclarationSyntax.Parent is ClassDeclarationSyntax classDeclarationSyntax
                 && classDeclarationSyntax.AttributeLists.Count > 0)
