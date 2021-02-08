@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
@@ -75,7 +76,8 @@ namespace " + _observableObjectAttributeNameSpace + @"
             }
         }
 
-        [MemberNotNull(nameof(_attributeTypeSymbol), nameof(_iNotifyChangedSymbol), nameof(_iNotifyChangingSymbol))]
+        //[MemberNotNull(nameof(_attributeTypeSymbol), nameof(_iNotifyChangedSymbol), nameof(_iNotifyChangingSymbol))]
+        // Attribute not supported in netstandard 2.0
         private void EnsureSymbolsSet(CSharpCompilation cSharpCompilation)
         {
             if (_attributeTypeSymbol is not null && _iNotifyChangedSymbol is not null && _iNotifyChangingSymbol is not null)
@@ -167,7 +169,7 @@ namespace {namespaceName}
                 if (fieldName.Length == 1)
                     return fieldName.ToUpper();
 
-                return char.ToUpperInvariant(fieldName[0]) + fieldName[1..];
+                return char.ToUpperInvariant(fieldName[0]) + fieldName.Substring(1);
             }
         }
     }
