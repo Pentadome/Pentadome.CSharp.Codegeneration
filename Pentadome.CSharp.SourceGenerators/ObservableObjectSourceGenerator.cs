@@ -38,7 +38,7 @@ namespace " + _observableObjectAttributeNameSpace + @"
         {
             context.RegisterForSyntaxNotifications(() => new ObservableObjectSourceGeneratorSyntaxReceiver());
 
-#if DEBUG
+#if DEBUGSOURCEGENERATOR
             if (!Debugger.IsAttached)
             {
                 Debugger.Launch();
