@@ -23,7 +23,7 @@ using System;
 namespace " + _observableObjectAttributeNameSpace + @"
 {
     [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
-    internal sealed class " + _observableObjectAttributeTypeName + @" : Attribute
+    public sealed class " + _observableObjectAttributeTypeName + @" : Attribute
     {
     }
 }
@@ -37,11 +37,17 @@ namespace " + _observableObjectAttributeNameSpace + @"
         public void Initialize(GeneratorInitializationContext context)
         {
             context.RegisterForSyntaxNotifications(() => new ObservableObjectSourceGeneratorSyntaxReceiver());
+
+#if DEBUG
+            if (!Debugger.IsAttached)
+                Debugger.Launch();
+#endif
         }
 
         public void Execute(GeneratorExecutionContext context)
         {
             context.AddSource(_observableObjectAttributeTypeName, SourceText.From(_observableObjectAttributeString, Encoding.UTF8));
+
 
             if (context.SyntaxReceiver is not ObservableObjectSourceGeneratorSyntaxReceiver syntaxReceiver)
                 return;
