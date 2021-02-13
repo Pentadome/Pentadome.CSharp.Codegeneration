@@ -8,23 +8,22 @@ namespace Pentadome.CSharp.SourceGenerators
 {
     internal class ObservableObjectSourceGeneratorSyntaxReceiver : ISyntaxReceiver
     {
-        public IReadOnlyList<FieldDeclarationSyntax> CandidateFields => _candidateFields ??= _candidateFieldsList.AsReadOnly();
+        public IReadOnlyList<ClassDeclarationSyntax> CandidateClasses => _candidateClasses ??= _candidateClassesList.AsReadOnly();
 
-        private IReadOnlyList<FieldDeclarationSyntax>? _candidateFields;
+        private IReadOnlyList<ClassDeclarationSyntax>? _candidateClasses;
 
-        private readonly List<FieldDeclarationSyntax> _candidateFieldsList = new List<FieldDeclarationSyntax>();
+        private readonly List<ClassDeclarationSyntax> _candidateClassesList = new List<ClassDeclarationSyntax>();
 
         /// <summary>
         /// Called for every syntax node in the compilation, we can inspect the nodes and save any information useful for generation
         /// </summary>
         public void OnVisitSyntaxNode(SyntaxNode syntaxNode)
         {
-            // any field where parent is a class and that class has at least one attribute is a candidate for property generation
-            if (syntaxNode is FieldDeclarationSyntax fieldDeclarationSyntax
-                && fieldDeclarationSyntax.Parent is ClassDeclarationSyntax classDeclarationSyntax
-                && classDeclarationSyntax.AttributeLists.Count > 0)
+            // any class has at least one attribute is a candidate
+            if (syntaxNode is ClassDeclarationSyntax classDeclarationSyntax
+                && classDeclarationSyntax.AttributeLists.Any())
             {
-                _candidateFieldsList.Add(fieldDeclarationSyntax);
+                _candidateClassesList.Add(classDeclarationSyntax);
             }
         }
     }

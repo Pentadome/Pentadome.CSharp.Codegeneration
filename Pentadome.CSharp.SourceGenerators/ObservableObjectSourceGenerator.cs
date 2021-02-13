@@ -37,6 +37,13 @@ namespace " + _observableObjectAttributeNameSpace + @"
         public void Initialize(GeneratorInitializationContext context)
         {
             context.RegisterForSyntaxNotifications(() => new ObservableObjectSourceGeneratorSyntaxReceiver());
+
+#if DEBUG
+            if (!Debugger.IsAttached)
+            {
+                Debugger.Launch();
+            }
+#endif
         }
 
         public void Execute(GeneratorExecutionContext context)
@@ -46,51 +53,45 @@ namespace " + _observableObjectAttributeNameSpace + @"
             if (context.SyntaxReceiver is not ObservableObjectSourceGeneratorSyntaxReceiver syntaxReceiver)
                 return;
 
-            var compilation = (CSharpCompilation)context.Compilation;
-            EnsureSymbolsSet(compilation);
+            var compilation = EnsureSymbolsSet((CSharpCompilation)context.Compilation);
 
-            foreach (var symbolsGroup in GetFieldSymbols(compilation, syntaxReceiver.CandidateFields).GroupBy(x => x.ContainingType))
+            foreach (var symbolsGroup in GetFieldSymbols(compilation, syntaxReceiver.CandidateClasses).GroupBy(x => x.ContainingType))
             {
-                var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable(), _iNotifyChangedSymbol, _iNotifyChangingSymbol);
+                var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable(), _iNotifyChangedSymbol!, _iNotifyChangingSymbol!);
                 context.AddSource($"{symbolsGroup.Key.Name}_observable.g.cs", SourceText.From(classSourceString, Encoding.UTF8));
             }
         }
 
-        private IEnumerable<IFieldSymbol> GetFieldSymbols(CSharpCompilation compilation, IEnumerable<FieldDeclarationSyntax> fields)
+        private IEnumerable<IFieldSymbol> GetFieldSymbols(CSharpCompilation compilation, IEnumerable<ClassDeclarationSyntax> classDeclarations)
         {
-            foreach (var field in fields)
+            foreach (var classDeclaration in classDeclarations)
             {
-                var model = compilation.GetSemanticModel(field.SyntaxTree);
-                foreach (var variable in field.Declaration.Variables)
-                {
-                    // Get the symbol being decleared by the field, and keep it if the containing class is annotated.
-                    var fieldSymbol = (model.GetDeclaredSymbol(variable) as IFieldSymbol)!;
+                var model = compilation.GetSemanticModel(classDeclaration.SyntaxTree);
+                var classSymbol = model.GetDeclaredSymbol(classDeclaration)!;
 
-                    if (fieldSymbol.ContainingType.TypeKind == TypeKind.Class &&
-                        fieldSymbol.ContainingType.GetAttributes()
-                            .Any(x => x.AttributeClass!.Equals(_attributeTypeSymbol, SymbolEqualityComparer.Default)))
-                    {
-                        yield return fieldSymbol;
-                    }
+                if (!classSymbol.GetAttributes().Any(x => x.AttributeClass!.Equals(_attributeTypeSymbol, SymbolEqualityComparer.Default)))
+                    continue;
+
+                foreach (var field in classSymbol.GetMembers().Where(x => x.Kind == SymbolKind.Field).Cast<IFieldSymbol>())
+                {
+                    yield return field;
                 }
             }
         }
 
         //[MemberNotNull(nameof(_attributeTypeSymbol), nameof(_iNotifyChangedSymbol), nameof(_iNotifyChangingSymbol))]
         // Attribute not supported in netstandard 2.0
-        private void EnsureSymbolsSet(CSharpCompilation cSharpCompilation)
+        private CSharpCompilation EnsureSymbolsSet(CSharpCompilation cSharpCompilation)
         {
-            if (_attributeTypeSymbol is not null && _iNotifyChangedSymbol is not null && _iNotifyChangingSymbol is not null)
-                return;
-
-            CSharpParseOptions options = (cSharpCompilation.SyntaxTrees[0].Options as CSharpParseOptions)!;
-            Compilation compilation = cSharpCompilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(SourceText.From(_observableObjectAttributeString, Encoding.UTF8), options));
+            var options = (cSharpCompilation.SyntaxTrees[0].Options as CSharpParseOptions)!;
+            var compilation = cSharpCompilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(SourceText.From(_observableObjectAttributeString, Encoding.UTF8), options));
 
             // get the newly bound attribute, INotifyPropertyChanging and INotifyPropertyChanged
             const string fullAttributeName = _observableObjectAttributeNameSpace + "." + _observableObjectAttributeTypeName;
-            _attributeTypeSymbol = compilation.GetTypeByMetadataNameOrThrow(fullAttributeName);
-            _iNotifyChangedSymbol = compilation.GetTypeByMetadataNameOrThrow("System.ComponentModel.INotifyPropertyChanged");
-            _iNotifyChangingSymbol = compilation.GetTypeByMetadataNameOrThrow("System.ComponentModel.INotifyPropertyChanging");
+            _attributeTypeSymbol ??= compilation.GetTypeByMetadataNameOrThrow(fullAttributeName);
+            _iNotifyChangedSymbol ??= compilation.GetTypeByMetadataNameOrThrow("System.ComponentModel.INotifyPropertyChanged");
+            _iNotifyChangingSymbol ??= compilation.GetTypeByMetadataNameOrThrow("System.ComponentModel.INotifyPropertyChanging");
+            return compilation;
         }
 
         private static string ProcessClass(INamedTypeSymbol classSymbol, IEnumerable<IFieldSymbol> fields, INamedTypeSymbol notifyChangedSymbol, INamedTypeSymbol notifyChangingSymbol)
@@ -114,12 +115,12 @@ namespace {namespaceName}
             // if the class doesn't implement INotifyPropertyChanged already, add it
             if (!classSymbol.Interfaces.Contains(notifyChangedSymbol))
             {
-                source.Append("public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;");
+                source.AppendLine("            public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;");
             }
             // if the class doesn't implement INotifyPropertyChanging already, add it
             if (!classSymbol.Interfaces.Contains(notifyChangingSymbol))
             {
-                source.Append("public event System.ComponentModel.PropertyChangingEventHandler PropertyChanging;");
+                source.AppendLine("            public event System.ComponentModel.PropertyChangingEventHandler PropertyChanging;");
             }
 
             // create properties for each field 
@@ -128,7 +129,7 @@ namespace {namespaceName}
                 ProcessField(source, fieldSymbol);
             }
 
-            source.Append("\n}\n}");
+            source.Append("    \n}\n}");
             return source.ToString();
         }
 
@@ -145,20 +146,20 @@ namespace {namespaceName}
                 return;
             }
 
-            source.AppendLine().Append("public ").Append(fieldType).Append(' ').Append(propertyName).Append(@"
-{
-    get
-    {
-        return this.").Append(fieldName).Append(@";
-    }
-    set
-    {
-        this.PropertyChanging?.Invoke(this, new System.ComponentModel.PropertyChangingEventArgs(nameof(").Append(propertyName).Append(@")));
-        this.").Append(fieldName).Append(@" = value;
-        this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(").Append(propertyName).Append(@")));
-    }
-}
-");
+            source.Append(@"
+        public ").Append(fieldType).Append(' ').Append(propertyName).AppendLine(@"
+            {
+                get
+                {
+                    return this.").Append(fieldName).Append(@";
+                }
+                set
+                {
+                    this.PropertyChanging?.Invoke(this, new System.ComponentModel.PropertyChangingEventArgs(nameof(").Append(propertyName).Append(@")));
+                    this.").Append(fieldName).Append(@" = value;
+                    this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(").Append(propertyName).Append(@")));
+                }
+            }");
 
             static string getPropertyName(string fieldName)
             {
