@@ -4,9 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Pentadome.CSharp.SourceGenerators
+namespace Pentadome.CSharp.SourceGenerators.ObservableObjects
 {
-    internal class ObservableObjectSourceGeneratorSyntaxReceiver : ISyntaxReceiver
+    internal class ObservableObjectSyntaxReceiver : ISyntaxReceiver
     {
         public IReadOnlyList<ClassDeclarationSyntax> CandidateClasses => _candidateClasses ??= _candidateClassesList.AsReadOnly();
 

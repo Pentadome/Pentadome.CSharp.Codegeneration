@@ -11,5 +11,13 @@ namespace Pentadome.CSharp.SourceGenerators.Demo
         private string _lastName;
 
         private DateTime _birthday;
+
+        [ObservableObject]
+        public partial class Head
+        {
+#pragma warning disable
+            private int _headSize;
+#pragma warning restore
+        }
     }
 }

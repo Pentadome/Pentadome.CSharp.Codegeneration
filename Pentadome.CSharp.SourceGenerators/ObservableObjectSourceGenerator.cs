@@ -9,6 +9,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using Pentadome.CSharp.SourceGenerators.ObservableObjects.UserAttributes;
+using Pentadome.CSharp.SourceGenerators.ObservableObjects;
 
 namespace Pentadome.CSharp.SourceGenerators
 {
@@ -23,7 +24,7 @@ namespace Pentadome.CSharp.SourceGenerators
 
         public void Initialize(GeneratorInitializationContext context)
         {
-            context.RegisterForSyntaxNotifications(() => new ObservableObjectSourceGeneratorSyntaxReceiver());
+            context.RegisterForSyntaxNotifications(() => new ObservableObjectSyntaxReceiver());
 
 #if DEBUGSOURCEGENERATOR
             if (!Debugger.IsAttached)
@@ -37,15 +38,16 @@ namespace Pentadome.CSharp.SourceGenerators
         {
             Attributes.AddAttributesToSource(context);
 
-            if (context.SyntaxReceiver is not ObservableObjectSourceGeneratorSyntaxReceiver syntaxReceiver)
+            if (context.SyntaxReceiver is not ObservableObjectSyntaxReceiver syntaxReceiver)
                 return;
 
             var compilation = EnsureSymbolsSet((CSharpCompilation)context.Compilation);
 
             foreach (var symbolsGroup in GetFieldSymbols(compilation, syntaxReceiver.CandidateClasses).GroupBy(x => x.ContainingType))
             {
-                var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable(), _iNotifyChangedSymbol!, _iNotifyChangingSymbol!);
-                context.AddSource($"{symbolsGroup.Key.Name}_observable.cs", SourceText.From(classSourceString, Encoding.UTF8));
+                var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable(), compilation, context);
+                if (classSourceString is not null)
+                    context.AddSource($"{symbolsGroup.Key.Name}_observable.cs", SourceText.From(classSourceString, Encoding.UTF8));
             }
         }
 
@@ -80,10 +82,23 @@ namespace Pentadome.CSharp.SourceGenerators
             return compilation;
         }
 
-        private static string ProcessClass(INamedTypeSymbol classSymbol, IEnumerable<IFieldSymbol> fields, INamedTypeSymbol notifyChangedSymbol, INamedTypeSymbol notifyChangingSymbol)
+        private string? ProcessClass(INamedTypeSymbol classSymbol, IEnumerable<IFieldSymbol> fields, CSharpCompilation compilation, GeneratorExecutionContext context)
         {
             if (!classSymbol.ContainingSymbol.Equals(classSymbol.ContainingNamespace, SymbolEqualityComparer.Default))
             {
+                var attributeData = classSymbol.GetAttributes().First(x => x.AttributeClass!.Equals(_observableObjectAttributeSymbol, SymbolEqualityComparer.Default));
+                context.ReportDiagnostic(
+                    Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "100",
+                            "Incorrect attribute usage.",
+                            "Targetted class {0} can not be a part of another class.",
+                            "Attribute Usage",
+                            DiagnosticSeverity.Warning,
+                            true,
+                            "Targetted class can not be a part of another class.")
+                        , attributeData.ApplicationSyntaxReference!.GetSyntax().GetLocation(),
+                        classSymbol.ToDisplayString()));
                 return null; //TODO: issue a diagnostic that it must be top level
             }
 
@@ -95,17 +110,17 @@ namespace Pentadome.CSharp.SourceGenerators
 using System;
 namespace {namespaceName}
 {{
-    public partial class {classSymbol.Name} : {notifyChangedSymbol.ToDisplayString()}, {notifyChangingSymbol.ToDisplayString()}
+    public partial class {classSymbol.Name} : {_iNotifyChangedSymbol!.ToDisplayString()}, {_iNotifyChangingSymbol!.ToDisplayString()}
     {{
 ");
 
             // if the class doesn't implement INotifyPropertyChanged already, add it
-            if (!classSymbol.Interfaces.Contains(notifyChangedSymbol))
+            if (!classSymbol.Interfaces.Contains(_iNotifyChangedSymbol))
             {
                 source.AppendLine("        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;");
             }
             // if the class doesn't implement INotifyPropertyChanging already, add it
-            if (!classSymbol.Interfaces.Contains(notifyChangingSymbol))
+            if (!classSymbol.Interfaces.Contains(_iNotifyChangingSymbol))
             {
                 source.AppendLine("        public event System.ComponentModel.PropertyChangingEventHandler PropertyChanging;");
             }
