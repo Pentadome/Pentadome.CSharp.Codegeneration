@@ -12,7 +12,7 @@ namespace Pentadome.CSharp.SourceGenerators.ObservableObjects
 
         private IReadOnlyList<ClassDeclarationSyntax>? _candidateClasses;
 
-        private readonly List<ClassDeclarationSyntax> _candidateClassesList = new List<ClassDeclarationSyntax>();
+        private readonly List<ClassDeclarationSyntax> _candidateClassesList = new();
 
         /// <summary>
         /// Called for every syntax node in the compilation, we can inspect the nodes and save any information useful for generation

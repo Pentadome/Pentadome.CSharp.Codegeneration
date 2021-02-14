@@ -12,6 +12,10 @@ namespace Pentadome.CSharp.SourceGenerators.Demo
 
         private DateTime _birthday;
 
+        public bool OnLastNameChangedHasRun { get; private set; }
+
+        partial void OnLastNameChanged() => OnLastNameChangedHasRun = true;
+
         [ObservableObject]
         public partial class Head
         {

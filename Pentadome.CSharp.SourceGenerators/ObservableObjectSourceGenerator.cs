@@ -45,9 +45,11 @@ namespace Pentadome.CSharp.SourceGenerators
 
             foreach (var symbolsGroup in GetFieldSymbols(compilation, syntaxReceiver.CandidateClasses).GroupBy(x => x.ContainingType))
             {
-                var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable(), compilation, context);
-                if (classSourceString is not null)
-                    context.AddSource($"{symbolsGroup.Key.Name}_observable.cs", SourceText.From(classSourceString, Encoding.UTF8));
+                if (!ClassValidator.ValidateAndReportDiagnostics(symbolsGroup.Key, context))
+                    continue;
+
+                var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable());
+                context.AddSource($"{symbolsGroup.Key.Name}_observable.cs", SourceText.From(classSourceString, Encoding.UTF8));
             }
         }
 
@@ -82,26 +84,8 @@ namespace Pentadome.CSharp.SourceGenerators
             return compilation;
         }
 
-        private string? ProcessClass(INamedTypeSymbol classSymbol, IEnumerable<IFieldSymbol> fields, CSharpCompilation compilation, GeneratorExecutionContext context)
+        private string ProcessClass(INamedTypeSymbol classSymbol, IEnumerable<IFieldSymbol> fields)
         {
-            if (!classSymbol.ContainingSymbol.Equals(classSymbol.ContainingNamespace, SymbolEqualityComparer.Default))
-            {
-                var attributeData = classSymbol.GetAttributes().First(x => x.AttributeClass!.Equals(_observableObjectAttributeSymbol, SymbolEqualityComparer.Default));
-                context.ReportDiagnostic(
-                    Diagnostic.Create(
-                        new DiagnosticDescriptor(
-                            "100",
-                            "Incorrect attribute usage.",
-                            "Targetted class {0} can not be a part of another class.",
-                            "Attribute Usage",
-                            DiagnosticSeverity.Warning,
-                            true,
-                            "Targetted class can not be a part of another class.")
-                        , attributeData.ApplicationSyntaxReference!.GetSyntax().GetLocation(),
-                        classSymbol.ToDisplayString()));
-                return null; //TODO: issue a diagnostic that it must be top level
-            }
-
             string namespaceName = classSymbol.ContainingNamespace.ToDisplayString();
 
             // begin building the generated source
@@ -149,16 +133,16 @@ namespace {namespaceName}
             }
 
             source.Append(@"
+        partial void On").Append(propertyName).Append(@"Changed();
+
         public ").Append(fieldType).Append(' ').Append(propertyName).Append(@"
         {
-            get
-            {
-                return this.").Append(fieldName).Append(@";
-            }
+            get => this.").Append(fieldName).Append(@";
             set
             {
                 this.PropertyChanging?.Invoke(this, new System.ComponentModel.PropertyChangingEventArgs(nameof(").Append(propertyName).Append(@")));
-                this.").Append(fieldName).Append(@" = value;
+                this.").Append(fieldName).Append(" = value;").Append(@"
+                this.").Append("On").Append(propertyName).Append("Changed();").Append(@"
                 this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(").Append(propertyName).Append(@")));
             }
         }");
