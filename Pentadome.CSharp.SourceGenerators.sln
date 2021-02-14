@@ -10,22 +10,35 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Pentadome.CSharp.SourceGenerators.Demo", "Pentadome.CSharp.SourceGenerators.Demo\Pentadome.CSharp.SourceGenerators.Demo.csproj", "{7383EC67-C21C-43A6-8855-EBC173F69550}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Pentadome.CSharp.SourceGenerators.Demo", "Pentadome.CSharp.SourceGenerators.Demo\Pentadome.CSharp.SourceGenerators.Demo.csproj", "{7383EC67-C21C-43A6-8855-EBC173F69550}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Pentadome.CSharp.SourceGenerators.Tests", "Pentadome.CSharp.SourceGenerators.Tests\Pentadome.CSharp.SourceGenerators.Tests.csproj", "{175C05EA-CBDF-4896-8AF4-8DB32F6BA2B1}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		DebugSourceGenerator|Any CPU = DebugSourceGenerator|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{6DAB37BB-5AF4-482B-BBE9-1A6C92F63891}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{6DAB37BB-5AF4-482B-BBE9-1A6C92F63891}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DAB37BB-5AF4-482B-BBE9-1A6C92F63891}.DebugSourceGenerator|Any CPU.ActiveCfg = DebugSourceGenerator|Any CPU
+		{6DAB37BB-5AF4-482B-BBE9-1A6C92F63891}.DebugSourceGenerator|Any CPU.Build.0 = DebugSourceGenerator|Any CPU
 		{6DAB37BB-5AF4-482B-BBE9-1A6C92F63891}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6DAB37BB-5AF4-482B-BBE9-1A6C92F63891}.Release|Any CPU.Build.0 = Release|Any CPU
 		{7383EC67-C21C-43A6-8855-EBC173F69550}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7383EC67-C21C-43A6-8855-EBC173F69550}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7383EC67-C21C-43A6-8855-EBC173F69550}.DebugSourceGenerator|Any CPU.ActiveCfg = DebugSourceGenerator|Any CPU
+		{7383EC67-C21C-43A6-8855-EBC173F69550}.DebugSourceGenerator|Any CPU.Build.0 = DebugSourceGenerator|Any CPU
 		{7383EC67-C21C-43A6-8855-EBC173F69550}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7383EC67-C21C-43A6-8855-EBC173F69550}.Release|Any CPU.Build.0 = Release|Any CPU
+		{175C05EA-CBDF-4896-8AF4-8DB32F6BA2B1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{175C05EA-CBDF-4896-8AF4-8DB32F6BA2B1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{175C05EA-CBDF-4896-8AF4-8DB32F6BA2B1}.DebugSourceGenerator|Any CPU.ActiveCfg = DebugSourceGenerator|Any CPU
+		{175C05EA-CBDF-4896-8AF4-8DB32F6BA2B1}.DebugSourceGenerator|Any CPU.Build.0 = DebugSourceGenerator|Any CPU
+		{175C05EA-CBDF-4896-8AF4-8DB32F6BA2B1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{175C05EA-CBDF-4896-8AF4-8DB32F6BA2B1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

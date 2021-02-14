@@ -4,12 +4,11 @@
     <TargetFramework>net5.0</TargetFramework>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+    <Configurations>Debug;Release;DebugSourceGenerator</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Pentadome.CSharp.SourceGenerators\Pentadome.CSharp.SourceGenerators.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Pentadome.CSharp.SourceGenerators\Pentadome.CSharp.SourceGenerators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>
