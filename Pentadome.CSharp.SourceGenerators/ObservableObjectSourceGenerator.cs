@@ -8,27 +8,15 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
+using Pentadome.CSharp.SourceGenerators.ObservableObjects.UserAttributes;
+using Pentadome.CSharp.SourceGenerators.ObservableObjects;
 
 namespace Pentadome.CSharp.SourceGenerators
 {
     [Generator]
     public sealed class ObservableObjectSourceGenerator : ISourceGenerator
     {
-        private const string _observableObjectAttributeTypeName = "ObservableObjectAttribute";
-
-        private const string _observableObjectAttributeNameSpace = "Pentadome.CSharp.SourceGenerators.ApplicationCode";
-
-        private const string _observableObjectAttributeString = @"
-using System;
-namespace " + _observableObjectAttributeNameSpace + @"
-{
-    [AttributeUsage(AttributeTargets.Class, Inherited = false, AllowMultiple = false)]
-    internal sealed class " + _observableObjectAttributeTypeName + @" : Attribute
-    {
-    }
-}
-";
-        private INamedTypeSymbol? _attributeTypeSymbol;
+        private INamedTypeSymbol? _observableObjectAttributeSymbol;
 
         private INamedTypeSymbol? _iNotifyChangedSymbol;
 
@@ -36,7 +24,7 @@ namespace " + _observableObjectAttributeNameSpace + @"
 
         public void Initialize(GeneratorInitializationContext context)
         {
-            context.RegisterForSyntaxNotifications(() => new ObservableObjectSourceGeneratorSyntaxReceiver());
+            context.RegisterForSyntaxNotifications(() => new ObservableObjectSyntaxReceiver());
 
 #if DEBUGSOURCEGENERATOR
             if (!Debugger.IsAttached)
@@ -48,16 +36,19 @@ namespace " + _observableObjectAttributeNameSpace + @"
 
         public void Execute(GeneratorExecutionContext context)
         {
-            context.AddSource(_observableObjectAttributeTypeName, SourceText.From(_observableObjectAttributeString, Encoding.UTF8));
+            Attributes.AddAttributesToSource(context);
 
-            if (context.SyntaxReceiver is not ObservableObjectSourceGeneratorSyntaxReceiver syntaxReceiver)
+            if (context.SyntaxReceiver is not ObservableObjectSyntaxReceiver syntaxReceiver)
                 return;
 
             var compilation = EnsureSymbolsSet((CSharpCompilation)context.Compilation);
 
             foreach (var symbolsGroup in GetFieldSymbols(compilation, syntaxReceiver.CandidateClasses).GroupBy(x => x.ContainingType))
             {
-                var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable(), _iNotifyChangedSymbol!, _iNotifyChangingSymbol!);
+                if (!ClassValidator.ValidateAndReportDiagnostics(symbolsGroup.Key, context))
+                    continue;
+
+                var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable());
                 context.AddSource($"{symbolsGroup.Key.Name}_observable.cs", SourceText.From(classSourceString, Encoding.UTF8));
             }
         }
@@ -69,7 +60,7 @@ namespace " + _observableObjectAttributeNameSpace + @"
                 var model = compilation.GetSemanticModel(classDeclaration.SyntaxTree);
                 var classSymbol = model.GetDeclaredSymbol(classDeclaration)!;
 
-                if (!classSymbol.GetAttributes().Any(x => x.AttributeClass!.Equals(_attributeTypeSymbol, SymbolEqualityComparer.Default)))
+                if (!classSymbol.GetAttributes().Any(x => x.AttributeClass!.Equals(_observableObjectAttributeSymbol, SymbolEqualityComparer.Default)))
                     continue;
 
                 foreach (var field in classSymbol.GetMembers().Where(x => x.Kind == SymbolKind.Field).Cast<IFieldSymbol>())
@@ -84,23 +75,17 @@ namespace " + _observableObjectAttributeNameSpace + @"
         private CSharpCompilation EnsureSymbolsSet(CSharpCompilation cSharpCompilation)
         {
             var options = (cSharpCompilation.SyntaxTrees[0].Options as CSharpParseOptions)!;
-            var compilation = cSharpCompilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(SourceText.From(_observableObjectAttributeString, Encoding.UTF8), options));
+            var compilation = Attributes.AddAttributesToSyntax(cSharpCompilation, options);
 
             // get the newly bound attribute, INotifyPropertyChanging and INotifyPropertyChanged
-            const string fullAttributeName = _observableObjectAttributeNameSpace + "." + _observableObjectAttributeTypeName;
-            _attributeTypeSymbol ??= compilation.GetTypeByMetadataNameOrThrow(fullAttributeName);
+            _observableObjectAttributeSymbol ??= compilation.GetTypeByMetadataNameOrThrow(Attributes._fullObservableObjectAttributeName);
             _iNotifyChangedSymbol ??= compilation.GetTypeByMetadataNameOrThrow("System.ComponentModel.INotifyPropertyChanged");
             _iNotifyChangingSymbol ??= compilation.GetTypeByMetadataNameOrThrow("System.ComponentModel.INotifyPropertyChanging");
             return compilation;
         }
 
-        private static string ProcessClass(INamedTypeSymbol classSymbol, IEnumerable<IFieldSymbol> fields, INamedTypeSymbol notifyChangedSymbol, INamedTypeSymbol notifyChangingSymbol)
+        private string ProcessClass(INamedTypeSymbol classSymbol, IEnumerable<IFieldSymbol> fields)
         {
-            if (!classSymbol.ContainingSymbol.Equals(classSymbol.ContainingNamespace, SymbolEqualityComparer.Default))
-            {
-                return null; //TODO: issue a diagnostic that it must be top level
-            }
-
             string namespaceName = classSymbol.ContainingNamespace.ToDisplayString();
 
             // begin building the generated source
@@ -109,17 +94,17 @@ namespace " + _observableObjectAttributeNameSpace + @"
 using System;
 namespace {namespaceName}
 {{
-    public partial class {classSymbol.Name} : {notifyChangedSymbol.ToDisplayString()}, {notifyChangingSymbol.ToDisplayString()}
+    public partial class {classSymbol.Name} : {_iNotifyChangedSymbol!.ToDisplayString()}, {_iNotifyChangingSymbol!.ToDisplayString()}
     {{
 ");
 
             // if the class doesn't implement INotifyPropertyChanged already, add it
-            if (!classSymbol.Interfaces.Contains(notifyChangedSymbol))
+            if (!classSymbol.Interfaces.Contains(_iNotifyChangedSymbol))
             {
                 source.AppendLine("        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;");
             }
             // if the class doesn't implement INotifyPropertyChanging already, add it
-            if (!classSymbol.Interfaces.Contains(notifyChangingSymbol))
+            if (!classSymbol.Interfaces.Contains(_iNotifyChangingSymbol))
             {
                 source.AppendLine("        public event System.ComponentModel.PropertyChangingEventHandler PropertyChanging;");
             }
@@ -148,16 +133,16 @@ namespace {namespaceName}
             }
 
             source.Append(@"
+        partial void On").Append(propertyName).Append(@"Changed();
+
         public ").Append(fieldType).Append(' ').Append(propertyName).Append(@"
         {
-            get
-            {
-                return this.").Append(fieldName).Append(@";
-            }
+            get => this.").Append(fieldName).Append(@";
             set
             {
                 this.PropertyChanging?.Invoke(this, new System.ComponentModel.PropertyChangingEventArgs(nameof(").Append(propertyName).Append(@")));
-                this.").Append(fieldName).Append(@" = value;
+                this.").Append(fieldName).Append(" = value;").Append(@"
+                this.").Append("On").Append(propertyName).Append("Changed();").Append(@"
                 this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(").Append(propertyName).Append(@")));
             }
         }");

@@ -4,15 +4,15 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Pentadome.CSharp.SourceGenerators
+namespace Pentadome.CSharp.SourceGenerators.ObservableObjects
 {
-    internal class ObservableObjectSourceGeneratorSyntaxReceiver : ISyntaxReceiver
+    internal class ObservableObjectSyntaxReceiver : ISyntaxReceiver
     {
         public IReadOnlyList<ClassDeclarationSyntax> CandidateClasses => _candidateClasses ??= _candidateClassesList.AsReadOnly();
 
         private IReadOnlyList<ClassDeclarationSyntax>? _candidateClasses;
 
-        private readonly List<ClassDeclarationSyntax> _candidateClassesList = new List<ClassDeclarationSyntax>();
+        private readonly List<ClassDeclarationSyntax> _candidateClassesList = new();
 
         /// <summary>
         /// Called for every syntax node in the compilation, we can inspect the nodes and save any information useful for generation
