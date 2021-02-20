@@ -8,9 +8,14 @@ using System.Threading.Tasks;
 namespace Pentadome.CSharp.SourceGenerators.Demo
 {
     [ObservableObject]
-    // Must be declared partial
+    // Must be declared partial diagnostic test
     public class Car
     {
         private int _horsePower;
+
+        public Person Owner { get; } = new Person
+        {
+            FirstName = "Peter"
+        };
     }
 }

@@ -11,44 +11,41 @@ namespace Pentadome.CSharp.SourceGenerators.ObservableObjects
 {
     public static class ClassValidator
     {
-        public static bool ValidateAndReportDiagnostics(INamedTypeSymbol classSymbol, GeneratorExecutionContext context)
+        public static IReadOnlyCollection<Diagnostic> Validate(INamedTypeSymbol classSymbol)
         {
-            var isValid = true;
+            var diagnostics = new List<Diagnostic>();
             if (!classSymbol.ContainingSymbol.Equals(classSymbol.ContainingNamespace, SymbolEqualityComparer.Default))
             {
-                context.ReportDiagnostic(
+                diagnostics.Add(
                     Diagnostic.Create(
-                        new DiagnosticDescriptor(
-                            "100",
-                            "Incorrect attribute usage.",
-                            "Targetted class {0} can not be a part of another class.",
-                            "Attribute Usage",
-                            DiagnosticSeverity.Warning,
-                            true,
-                            "Targetted class can not be a part of another class.")
-                        , classSymbol.Locations[0],
-                        classSymbol.ToDisplayString()));
-                isValid = false;
+                    new DiagnosticDescriptor(
+                        "100",
+                        "Incorrect attribute usage.",
+                        "Targetted class {0} can not be a part of another class.",
+                        "Attribute Usage",
+                        DiagnosticSeverity.Warning,
+                        true,
+                        "Targetted class can not be a part of another class.")
+                    , classSymbol.Locations[0],
+                    classSymbol.ToDisplayString()));
             }
 
             if (!(classSymbol.DeclaringSyntaxReferences[0].GetSyntax() as ClassDeclarationSyntax)!.Modifiers.Any(x => x.IsKind(SyntaxKind.PartialKeyword)))
             {
-                context.ReportDiagnostic(
+                diagnostics.Add(
                     Diagnostic.Create(
-                        new DiagnosticDescriptor(
-                            "101",
-                            "Class must be partial",
-                            "Targetted class {0} must be declared partial",
-                            "Attribute Usage",
-                            DiagnosticSeverity.Warning,
-                            true,
-                            "Targetted class {0} must be declared partial")
-                        , classSymbol.Locations[0],
-                        classSymbol.ToDisplayString()));
-                isValid = false;
+                    new DiagnosticDescriptor(
+                        "101",
+                        "Class must be partial",
+                        "Targetted class {0} must be declared partial",
+                        "Attribute Usage",
+                        DiagnosticSeverity.Warning,
+                        true,
+                        "Targetted class {0} must be declared partial")
+                    , classSymbol.Locations[0],
+                    classSymbol.ToDisplayString()));
             }
-
-            return isValid;
+            return diagnostics.AsReadOnly();
         }
     }
 }

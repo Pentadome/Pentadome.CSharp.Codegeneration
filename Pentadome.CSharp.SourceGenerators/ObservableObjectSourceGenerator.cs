@@ -18,6 +18,8 @@ namespace Pentadome.CSharp.SourceGenerators
     {
         private INamedTypeSymbol? _observableObjectAttributeSymbol;
 
+        private INamedTypeSymbol? _propertyAttributeAttributeSymbol;
+
         private INamedTypeSymbol? _iNotifyChangedSymbol;
 
         private INamedTypeSymbol? _iNotifyChangingSymbol;
@@ -41,15 +43,25 @@ namespace Pentadome.CSharp.SourceGenerators
             if (context.SyntaxReceiver is not ObservableObjectSyntaxReceiver syntaxReceiver)
                 return;
 
-            var compilation = EnsureSymbolsSet((CSharpCompilation)context.Compilation);
+            var cSharpCompilation = (CSharpCompilation)context.Compilation;
+            var options = (cSharpCompilation.SyntaxTrees[0].Options as CSharpParseOptions)!;
+            cSharpCompilation = EnsureSymbolsSet(cSharpCompilation, options);
 
-            foreach (var symbolsGroup in GetFieldSymbols(compilation, syntaxReceiver.CandidateClasses).GroupBy(x => x.ContainingType))
+            foreach (var symbolsGroup in GetFieldSymbols(cSharpCompilation, syntaxReceiver.CandidateClasses).GroupBy(x => x.ContainingType))
             {
-                if (!ClassValidator.ValidateAndReportDiagnostics(symbolsGroup.Key, context))
-                    continue;
-
-                var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable());
-                context.AddSource($"{symbolsGroup.Key.Name}_observable.cs", SourceText.From(classSourceString, Encoding.UTF8));
+                var classDiagnostics = ClassValidator.Validate(symbolsGroup.Key);
+                if (classDiagnostics.Count > 0)
+                {
+                    foreach (var diagnostic in classDiagnostics)
+                    {
+                        context.ReportDiagnostic(diagnostic);
+                    }
+                }
+                else
+                {
+                    var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable());
+                    context.AddSource($"{symbolsGroup.Key.Name}_observable.cs", SourceText.From(classSourceString, Encoding.UTF8));
+                }
             }
         }
 
@@ -72,13 +84,13 @@ namespace Pentadome.CSharp.SourceGenerators
 
         //[MemberNotNull(nameof(_attributeTypeSymbol), nameof(_iNotifyChangedSymbol), nameof(_iNotifyChangingSymbol))]
         // Attribute not supported in netstandard 2.0
-        private CSharpCompilation EnsureSymbolsSet(CSharpCompilation cSharpCompilation)
+        private CSharpCompilation EnsureSymbolsSet(CSharpCompilation cSharpCompilation, CSharpParseOptions options)
         {
-            var options = (cSharpCompilation.SyntaxTrees[0].Options as CSharpParseOptions)!;
             var compilation = Attributes.AddAttributesToSyntax(cSharpCompilation, options);
 
             // get the newly bound attribute, INotifyPropertyChanging and INotifyPropertyChanged
             _observableObjectAttributeSymbol ??= compilation.GetTypeByMetadataNameOrThrow(Attributes._fullObservableObjectAttributeName);
+            _propertyAttributeAttributeSymbol ??= compilation.GetTypeByMetadataNameOrThrow(Attributes._fullPropertyAttributeAttributeName);
             _iNotifyChangedSymbol ??= compilation.GetTypeByMetadataNameOrThrow("System.ComponentModel.INotifyPropertyChanged");
             _iNotifyChangingSymbol ??= compilation.GetTypeByMetadataNameOrThrow("System.ComponentModel.INotifyPropertyChanging");
             return compilation;
@@ -119,7 +131,7 @@ namespace {namespaceName}
             return source.ToString();
         }
 
-        private static void ProcessField(StringBuilder source, IFieldSymbol fieldSymbol)
+        private void ProcessField(StringBuilder source, IFieldSymbol fieldSymbol)
         {
             // get the name and type of the field
             string fieldName = fieldSymbol.Name;
@@ -131,11 +143,18 @@ namespace {namespaceName}
                 //TODO: issue a diagnostic that we can't process this field
                 return;
             }
+            var propertyAttributes = GetPropertyAttributes(fieldSymbol).ToList();
 
             source.Append(@"
         partial void On").Append(propertyName).Append(@"Changed();
 
-        public ").Append(fieldType).Append(' ').Append(propertyName).Append(@"
+");
+            foreach (var attribute in propertyAttributes)
+            {
+                source.Append("        [").Append(attribute.ToFullString()).AppendLine("]");
+            }
+
+        source.Append("        public ").Append(fieldType).Append(' ').Append(propertyName).Append(@"
         {
             get => this.").Append(fieldName).Append(@";
             set
@@ -145,7 +164,8 @@ namespace {namespaceName}
                 this.").Append("On").Append(propertyName).Append("Changed();").Append(@"
                 this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(").Append(propertyName).Append(@")));
             }
-        }");
+        }
+");
 
             static string getPropertyName(string fieldName)
             {
@@ -157,6 +177,46 @@ namespace {namespaceName}
                     return fieldName.ToUpper();
 
                 return char.ToUpperInvariant(fieldName[0]) + fieldName.Substring(1);
+            }
+        }
+
+        private IEnumerable<AttributeSyntax> GetPropertyAttributes(IFieldSymbol fieldSymbol)
+        {
+            foreach (var attribute in fieldSymbol.GetAttributes().Where(x => x.AttributeClass!.Equals(_propertyAttributeAttributeSymbol, SymbolEqualityComparer.Default)))
+            {
+                var constructorArguments = attribute.ConstructorArguments;
+                var typeArgument = (constructorArguments[0].Value as INamedTypeSymbol)!.ToDisplayString();
+
+                var attributeSyntax = attribute.ApplicationSyntaxReference!.GetSyntax() as AttributeSyntax;
+                var attributeContructorArgumentsSyntax =
+                    attributeSyntax!.ArgumentList!.Arguments
+                        .Skip(1)
+                        .Where(x => x.NameEquals is null)
+                        .ToList();
+
+                var attributePropertiesAssignmentSyntax = attributeSyntax!.ArgumentList!.Arguments
+                    .FirstOrDefault(x => x.NameEquals is not null)?.Expression as ArrayCreationExpressionSyntax;
+
+                if (attributePropertiesAssignmentSyntax is not null)
+                {
+                    var keyValuePairs = attributePropertiesAssignmentSyntax.Initializer?.Expressions
+                        .OfType<BaseObjectCreationExpressionSyntax>()
+                        .Select(x => x.Initializer!.Expressions);
+
+                    if (keyValuePairs is not null)
+                    {
+                        foreach (var keyValuePair in keyValuePairs)
+                        {
+                            var key = (keyValuePair[0] as LiteralExpressionSyntax)!;
+                            var value = keyValuePair[1];
+                            var newArgument = SyntaxFactory.AttributeArgument(SyntaxFactory.NameEquals(key.ToString().Trim('"', ' ')), null, value);
+                            attributeContructorArgumentsSyntax.Add(newArgument);
+                        }
+                    }
+                }
+
+                var newAttributeArgumentList = SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(attributeContructorArgumentsSyntax));
+                yield return SyntaxFactory.Attribute(SyntaxFactory.ParseName(typeArgument), newAttributeArgumentList);
             }
         }
     }
