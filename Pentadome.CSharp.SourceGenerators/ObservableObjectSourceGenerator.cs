@@ -38,6 +38,13 @@ namespace Pentadome.CSharp.SourceGenerators
 
         public void Execute(GeneratorExecutionContext context)
         {
+#if DEBUGSOURCEGENERATOR
+            if (!Debugger.IsAttached)
+            {
+                Debugger.Launch();
+            }
+#endif
+
             Attributes.AddAttributesToSource(context);
 
             if (context.SyntaxReceiver is not ObservableObjectSyntaxReceiver syntaxReceiver)
@@ -127,7 +134,7 @@ namespace {namespaceName}
                 ProcessField(source, fieldSymbol);
             }
 
-            source.Append("\n    }\n}");
+            source.Append("\r\n    }\r\n}");
             return source.ToString();
         }
 
