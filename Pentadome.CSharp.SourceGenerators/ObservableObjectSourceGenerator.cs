@@ -67,7 +67,7 @@ namespace Pentadome.CSharp.SourceGenerators
                 else
                 {
                     var classSourceString = ProcessClass(symbolsGroup.Key, symbolsGroup.AsEnumerable());
-                    context.AddSource($"{symbolsGroup.Key.Name}_observable.cs", SourceText.From(classSourceString, Encoding.UTF8));
+                    context.AddSource($"{symbolsGroup.Key.Name}_observable", SourceText.From(classSourceString, Encoding.UTF8));
                 }
             }
         }
@@ -191,39 +191,59 @@ namespace {namespaceName}
         {
             foreach (var attribute in fieldSymbol.GetAttributes().Where(x => x.AttributeClass!.Equals(_propertyAttributeAttributeSymbol, SymbolEqualityComparer.Default)))
             {
-                var constructorArguments = attribute.ConstructorArguments;
-                var typeArgument = (constructorArguments[0].Value as INamedTypeSymbol)!.ToDisplayString();
+                var typeArgument = GetPropertyAttributeType(attribute);
 
                 var attributeSyntax = attribute.ApplicationSyntaxReference!.GetSyntax() as AttributeSyntax;
-                var attributeContructorArgumentsSyntax =
-                    attributeSyntax!.ArgumentList!.Arguments
-                        .Skip(1)
-                        .Where(x => x.NameEquals is null)
-                        .ToList();
 
-                var attributePropertiesAssignmentSyntax = attributeSyntax!.ArgumentList!.Arguments
-                    .FirstOrDefault(x => x.NameEquals is not null)?.Expression as ArrayCreationExpressionSyntax;
+                var newAttributeArgumentsSyntaxes = GetConstructorArguments(attributeSyntax!).Union(GetNamedPropertyArguments(attributeSyntax!));
 
-                if (attributePropertiesAssignmentSyntax is not null)
-                {
-                    var keyValuePairs = attributePropertiesAssignmentSyntax.Initializer?.Expressions
-                        .OfType<BaseObjectCreationExpressionSyntax>()
-                        .Select(x => x.Initializer!.Expressions);
+                var newAttributeArgumentList = SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(newAttributeArgumentsSyntaxes));
 
-                    if (keyValuePairs is not null)
-                    {
-                        foreach (var keyValuePair in keyValuePairs)
-                        {
-                            var key = (keyValuePair[0] as LiteralExpressionSyntax)!;
-                            var value = keyValuePair[1];
-                            var newArgument = SyntaxFactory.AttributeArgument(SyntaxFactory.NameEquals(key.ToString().Trim('"', ' ')), null, value);
-                            attributeContructorArgumentsSyntax.Add(newArgument);
-                        }
-                    }
-                }
-
-                var newAttributeArgumentList = SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(attributeContructorArgumentsSyntax));
                 yield return SyntaxFactory.Attribute(SyntaxFactory.ParseName(typeArgument), newAttributeArgumentList);
+            }
+
+            
+
+            static string GetPropertyAttributeType(AttributeData propetyAttributeAttributeData)
+            {
+                var constructorArguments = propetyAttributeAttributeData.ConstructorArguments;
+                return (constructorArguments[0].Value as INamedTypeSymbol)!.ToDisplayString();
+            }
+
+            static IEnumerable<AttributeArgumentSyntax> GetConstructorArguments(AttributeSyntax propertyAttributeAttributeSyntax)
+            {
+                return propertyAttributeAttributeSyntax!.ArgumentList!.Arguments.Skip(1).Where(x => x.NameEquals is null);
+            }
+
+            static IEnumerable<AttributeArgumentSyntax> GetNamedPropertyArguments(AttributeSyntax propertyAttributeAttributeSyntax)
+            {
+                var arguments = propertyAttributeAttributeSyntax.ArgumentList!.Arguments.Where(x => x.NameEquals is not null);
+
+                var argumentsById = arguments.ToLookup(x =>
+                {
+                    var nameEquals = x.NameEquals!.Name.Span.ToString();
+                    var namedArgumentId = nameEquals[Attributes._attributeNamedPropertyStartIdentifier.Length];
+                    return Convert.ToInt32(namedArgumentId);
+                });
+
+                for (byte i = 1; i != 5; i++)
+                {
+                    var namedPropertyData = argumentsById[i];
+
+                    if (!namedPropertyData.Any())
+                        continue;
+
+                    var namedPropertyNameSyntax = namedPropertyData.FirstOrDefault(x => x.NameEquals!.Name.Span.ToString().EndsWith(Attributes._attributeNamedPropertyNameIdentifier));
+                    var namedPropertyValueSyntax = namedPropertyData.FirstOrDefault(x => x.NameEquals!.Name.Span.ToString().EndsWith(Attributes._attributeNamedPropertyValueIdentifier));
+
+                    var namedPropertyName = namedPropertyNameSyntax.Expression.Span.ToString();
+                    var namedPropertyValueExpression = namedPropertyValueSyntax.Expression;
+
+                    yield return SyntaxFactory.AttributeArgument(
+                        SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName(namedPropertyName)),
+                        null,
+                        namedPropertyValueExpression);
+                }
             }
         }
     }

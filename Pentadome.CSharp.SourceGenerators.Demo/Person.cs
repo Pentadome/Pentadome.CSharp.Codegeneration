@@ -13,6 +13,7 @@ namespace Pentadome.CSharp.SourceGenerators.Demo
 
         private string _firstName;
 
+        [PropertyAttribute(typeof(DemoAttribute), "test", 23, Properties = new )]
         private string _lastName;
 
         [PropertyAttribute(typeof(JsonPropertyNameAttribute), "dayOfBirth")]
